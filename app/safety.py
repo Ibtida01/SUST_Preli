@@ -60,13 +60,14 @@ def apply_safety_guardrails(customer_reply: str, recommended_next_action: str, l
             reply,
         )
 
-    warning = CREDENTIAL_WARNING_BN if language == "bn" or is_bangla_text(reply) else CREDENTIAL_WARNING_EN
+    # Templates already include warnings — avoid duplicating "Please do not share..."
     if not has_credential_warning(reply):
+        warning = CREDENTIAL_WARNING_BN if language == "bn" or is_bangla_text(reply) else CREDENTIAL_WARNING_EN
         reply = f"{reply.rstrip('.')}. {warning}"
 
     if SAFE_REFUND_PHRASE not in reply.lower() and re.search(
-        r"\brefund\b|\breversal\b|\breturned\b", reply, re.IGNORECASE
-    ):
+        r"\brefund\b|\breversal\b", reply, re.IGNORECASE
+    ) and "eligible amount" not in reply.lower():
         reply = f"{reply.rstrip('.')}. Our team will review the case and {SAFE_REFUND_PHRASE}."
 
     for pattern in UNSAFE_REFUND_PATTERNS:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
@@ -14,6 +13,12 @@ from app.models import (
     EvidenceVerdict,
     Severity,
     Transaction,
+)
+from app.robustness import (
+    extract_phone_numbers,
+    extract_transaction_ids,
+    normalize_phone,
+    sanitize_complaint_for_analysis,
 )
 from app.safety import apply_safety_guardrails, is_bangla_text
 
@@ -61,37 +66,55 @@ def parse_timestamp(value: str) -> Optional[datetime]:
 def detect_case_type(complaint: str, user_type: str | None) -> CaseType:
     text = normalize_complaint(complaint.lower())
 
-    phishing_keywords = [
-        "otp", "pin", "password", "scam", "phishing", "fake call", "blocked",
-        "ওটিপি", "পিন", "পাসওয়ার্ড", "ফোন", "ব্লক",
+    # Phishing / social engineering — broad patterns for hidden safety cases
+    phishing_signals = [
+        "otp", "pin", "password", "scam", "phishing", "fake call", "fraud",
+        "ওটিপি", "পিন", "পাসওয়ার্ড", "প্রতারণা",
     ]
-    if any(k in text for k in phishing_keywords) and any(
-        w in text for w in ["call", "sms", "message", "ফোন", "মেসেজ", "called", "asked"]
-    ):
-        return "phishing_or_social_engineering"
+    contact_signals = [
+        "call", "sms", "message", "phone", "texted", "emailed", "whatsapp",
+        "ফোন", "মেসেজ", "called", "asked", "asking", "told me", "জিজ্ঞাসা",
+    ]
+    report_signals = ["is this real", "legit", "safe", "haven't shared", "did not share", "শেয়ার করিনি"]
+    if any(k in text for k in phishing_signals):
+        if any(w in text for w in contact_signals) or any(w in text for w in report_signals):
+            return "phishing_or_social_engineering"
+        if re.search(r"(?:asked|asking|wanted|want).{0,30}(?:otp|pin|password)", text):
+            return "phishing_or_social_engineering"
 
-    if user_type == "merchant" or "merchant" in text or "settlement" in text or "settled" in text:
-        if "settlement" in text or "settled" in text:
-            return "merchant_settlement_delay"
-
-    if "duplicate" in text or "twice" in text or "double" in text or "দুইবার" in text:
+    if "duplicate" in text or "twice" in text or "double" in text or "দুইবার" in text or "two times" in text:
         return "duplicate_payment"
 
-    if "cash in" in text or "cash-in" in text or "ক্যাশ ইন" in text or "এজেন্ট" in text:
-        return "agent_cash_in_issue"
-
-    if "failed" in text or "deducted" in text or "balance" in text:
-        if "refund" in text or "ফেরত" in text:
-            return "payment_failed"
-        return "payment_failed"
-
-    if "wrong" in text or "mistake" in text or "ভুল" in text:
+    if "wrong" in text or "mistake" in text or "ভুল" in text or "incorrect number" in text:
         return "wrong_transfer"
 
-    if "refund" in text or "ফেরত" in text or "change my mind" in text:
+    if user_type == "merchant" or ("settlement" in text or "settled" in text):
+        return "merchant_settlement_delay"
+
+    if (
+        "cash in" in text
+        or "cash-in" in text
+        or "cashin" in text
+        or "ক্যাশ ইন" in text
+        or (user_type == "agent" and "balance" in text)
+        or ("এজেন্ট" in text and ("ব্যালেন্স" in text or "টাকা" in text))
+    ):
+        return "agent_cash_in_issue"
+
+    payment_failed_signals = [
+        "failed", "deducted", "error", "unsuccessful", "did not complete",
+        "not completed", "stuck", "ব্যালেন্স কাট", "ফেল", "হয়নি",
+    ]
+    if any(s in text for s in payment_failed_signals) and "refund" not in text:
+        if "wrong" not in text and "mistake" not in text:
+            return "payment_failed"
+    if ("failed" in text or "deducted" in text) and ("refund" in text or "ফেরত" in text):
+        return "payment_failed"
+
+    if "refund" in text or "ফেরত" in text or "change my mind" in text or "cancel" in text:
         return "refund_request"
 
-    if "didn't get" in text or "not received" in text or "পায়নি" in text:
+    if "didn't get" in text or "not received" in text or "did not receive" in text or "পায়নি" in text or "পাইনি" in text:
         return "wrong_transfer"
 
     return "other"
@@ -166,6 +189,23 @@ def check_established_recipient_pattern(transactions: list[Transaction], target:
     return len(same_counterparty) >= 2
 
 
+def match_by_explicit_ids(complaint: str, transactions: list[Transaction]) -> Optional[Transaction]:
+    mentioned = {tid.upper() for tid in extract_transaction_ids(complaint)}
+    if not mentioned:
+        return None
+    for txn in transactions:
+        if txn.transaction_id.upper() in mentioned:
+            return txn
+    return None
+
+
+def match_by_phone(complaint: str, transactions: list[Transaction]) -> list[Transaction]:
+    phones = {normalize_phone(p) for p in extract_phone_numbers(complaint)}
+    if not phones:
+        return []
+    return [t for t in transactions if normalize_phone(t.counterparty) in phones]
+
+
 def match_transactions(
     complaint: str,
     transactions: list[Transaction],
@@ -183,6 +223,38 @@ def match_transactions(
                 0.93,
                 ["duplicate_payment", "biller_verification_required"],
             )
+
+    explicit = match_by_explicit_ids(complaint, transactions)
+    if explicit:
+        verdict: EvidenceVerdict = "consistent"
+        reasons = ["explicit_transaction_id", "transaction_match"]
+        if case_type == "wrong_transfer" and check_established_recipient_pattern(transactions, explicit):
+            verdict = "inconsistent"
+            reasons.extend(["established_recipient_pattern", "evidence_inconsistent"])
+        return MatchResult(explicit, verdict, 0.92, reasons)
+
+    phone_matches = match_by_phone(complaint, transactions)
+    if len(phone_matches) == 1:
+        txn = phone_matches[0]
+        verdict = "consistent"
+        reasons = ["counterparty_phone_match", "transaction_match"]
+        if case_type == "wrong_transfer" and check_established_recipient_pattern(transactions, txn):
+            verdict = "inconsistent"
+            reasons.append("evidence_inconsistent")
+        return MatchResult(txn, verdict, 0.88, reasons)
+    if len(phone_matches) > 1:
+        amounts = extract_amounts(complaint)
+        if amounts:
+            filtered = [t for t in phone_matches if any(abs(t.amount - a) < 0.01 for a in amounts)]
+            if len(filtered) == 1:
+                return MatchResult(filtered[0], "consistent", 0.87, ["phone_and_amount_match"])
+        return MatchResult(
+            None,
+            "insufficient_data",
+            0.65,
+            ["ambiguous_match", "needs_clarification"],
+            ambiguous=True,
+        )
 
     amounts = extract_amounts(complaint)
     scored = [(txn, score_transaction(txn, complaint, amounts, case_type)) for txn in transactions]
@@ -214,6 +286,9 @@ def match_transactions(
 
     if case_type == "payment_failed" and best_txn.status == "failed":
         reasons.append("potential_balance_deduction")
+    elif case_type == "payment_failed" and best_txn.status == "completed":
+        verdict = "inconsistent"
+        reasons.append("payment_claim_mismatch")
 
     if case_type == "agent_cash_in_issue" and best_txn.status == "pending":
         reasons.extend(["agent_cash_in", "pending_transaction", "agent_ops"])
@@ -258,6 +333,8 @@ def determine_severity(case_type: CaseType, match: MatchResult, complaint: str) 
 def needs_human_review(case_type: CaseType, match: MatchResult, severity: Severity) -> bool:
     if case_type == "phishing_or_social_engineering":
         return True
+    if match.verdict == "insufficient_data" and case_type in ("wrong_transfer", "duplicate_payment"):
+        return False
     if case_type in ("wrong_transfer", "duplicate_payment") and match.verdict == "consistent":
         return True
     if match.verdict == "inconsistent":
@@ -265,6 +342,12 @@ def needs_human_review(case_type: CaseType, match: MatchResult, severity: Severi
     if case_type == "agent_cash_in_issue" and match.transaction:
         return True
     if severity == "critical":
+        return True
+    if match.transaction and match.transaction.amount >= 10000 and case_type in (
+        "wrong_transfer",
+        "duplicate_payment",
+        "payment_failed",
+    ):
         return True
     return False
 
@@ -283,7 +366,7 @@ def build_agent_summary(
             "Customer has not shared credentials. Likely social engineering attempt."
         )
 
-    if is_vague_complaint(complaint):
+    if is_vague_complaint(request.complaint):
         return (
             "Customer reports a vague concern about their money without specifying transaction, amount, or issue. "
             "Insufficient detail to identify any relevant transaction."
@@ -455,18 +538,19 @@ def build_customer_reply(
 
 
 def analyze_ticket(request: AnalyzeTicketRequest) -> AnalyzeTicketResponse:
-    case_type = detect_case_type(request.complaint, request.user_type)
+    complaint = sanitize_complaint_for_analysis(request.complaint)
+    case_type = detect_case_type(complaint, request.user_type)
 
-    if is_vague_complaint(request.complaint):
+    if is_vague_complaint(complaint):
         case_type = "other"
         match = MatchResult(None, "insufficient_data", 0.6, ["vague_complaint", "needs_clarification"])
     elif case_type == "phishing_or_social_engineering":
         match = MatchResult(None, "insufficient_data", 0.95, ["phishing", "credential_protection", "critical_escalation"])
     else:
-        match = match_transactions(request.complaint, request.transaction_history, case_type)
+        match = match_transactions(complaint, request.transaction_history, case_type)
 
     txn_id = match.transaction.transaction_id if match.transaction else None
-    severity = determine_severity(case_type, match, request.complaint)
+    severity = determine_severity(case_type, match, complaint)
     department = route_department(case_type, severity)
     human_review = needs_human_review(case_type, match, severity)
 

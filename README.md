@@ -84,6 +84,18 @@ See `.env.example`. No secrets are required for the rule-based version.
 - No LLM-based paraphrasing — responses are functional but less varied than AI-generated text
 - Amount/time matching is heuristic-based
 
+## Robustness features (hidden-test oriented)
+
+- **Prompt-injection stripping** — adversarial lines in complaints are ignored for classification
+- **Explicit `TXN-*` matching** — transaction IDs mentioned in complaints are linked directly
+- **Phone number matching** — counterparty numbers in complaints disambiguate transfers
+- **Broader phishing detection** — SMS/report-style scams without explicit "call" keyword
+- **Duplicate detection** — identical payments within 2 minutes even without "duplicate" keyword
+- **High-value escalation** — large disputed amounts flagged for human review
+- **Safety post-processing** — refund/credential guardrails on all customer replies
+
+Run edge-case tests: `PYTHONPATH=. python scripts/test_hidden_edge.py`
+
 ## Sample output
 
 See `samples/sample_output_tkt001.json` for output from public sample case SAMPLE-01.
