@@ -93,7 +93,7 @@ def detect_case_type(complaint: str, user_type: str | None) -> CaseType:
         if re.search(r"(?:asked|asking|wanted|want).{0,30}(?:otp|pin|password)", text):
             return "phishing_or_social_engineering"
 
-    if "duplicate" in text or "twice" in text or "double" in text or "দুইবার" in text or "two times" in text:
+    if "duplicate" in text or "twice" in text or "double" in text or "duibar" in text or "dui bar" in text or "দুইবার" in text or "two times" in text:
         return "duplicate_payment"
 
     wrong_transfer_signals = [
@@ -124,10 +124,13 @@ def detect_case_type(complaint: str, user_type: str | None) -> CaseType:
 
     if (
         "cash in" in text
+        or "kash in" in text
         or "cash-in" in text
         or "cashin" in text
+        or "kashin" in text
         or "ক্যাশ ইন" in text
         or (user_type == "agent" and "balance" in text)
+        or ("agent" in text and ("balance" in text or "kache" in text or "ashe nai" in text or "asheni" in text))
         or ("এজেন্ট" in text and ("ব্যালেন্স" in text or "টাকা" in text))
     ):
         return "agent_cash_in_issue"
@@ -205,7 +208,10 @@ def score_transaction(txn: Transaction, complaint: str, amounts: list[float], ca
     if "today" in text or "আজ" in text:
         score += 0.5
 
-    if txn.status == "pending" and ("pending" in text or "not reflected" in text or "আসেনি" in text):
+    if txn.status == "pending" and (
+        "pending" in text or "not reflected" in text or "আসেনি" in text
+        or "ashe nai" in text or "asheni" in text
+    ):
         score += 2.0
 
     return score

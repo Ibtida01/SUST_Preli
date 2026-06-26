@@ -69,11 +69,12 @@ def apply_safety_guardrails(customer_reply: str, recommended_next_action: str, l
     if contains_credential_request(reply):
         reply = CREDENTIAL_REQUEST_PATTERN.sub(CREDENTIAL_WARNING_EN, reply, count=1)
 
-    for pattern in UNSAFE_REFUND_PATTERNS:
-        reply = pattern.sub(
-            "Our team will review the case and any eligible amount will be returned through official channels.",
-            reply,
-        )
+    if SAFE_REFUND_PHRASE not in reply.lower():
+        for pattern in UNSAFE_REFUND_PATTERNS:
+            reply = pattern.sub(
+                "Our team will review the case and any eligible amount will be returned through official channels.",
+                reply,
+            )
 
     for pattern in SUSPICIOUS_THIRD_PARTY_PATTERNS:
         reply = pattern.sub(
