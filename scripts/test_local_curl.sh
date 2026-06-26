@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Local API test suite — run while server is up on port 8000
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:8000}"

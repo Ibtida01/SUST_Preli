@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Live Gemini slow-path smoke test — skips when USE_GEMINI is not configured."""
 
 from __future__ import annotations
 
@@ -10,7 +9,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from app.agent import gemini_status, is_gemini_enabled, route_with_gemini
+from app.agent import is_gemini_enabled, route_with_gemini
 from app.investigator import analyze_ticket_async
 from app.models import AnalyzeTicketRequest
 
@@ -41,9 +40,8 @@ AMBIGUOUS_CASE = {
 
 
 async def main() -> None:
-    print(f"Gemini status: {gemini_status()}")
     if not is_gemini_enabled():
-        print("SKIP: set USE_GEMINI=true and GEMINI_API_KEY in .env to run")
+        print("SKIP")
         sys.exit(0)
 
     req = AnalyzeTicketRequest.model_validate(AMBIGUOUS_CASE)
@@ -55,13 +53,11 @@ async def main() -> None:
     assert out["relevant_transaction_id"] is None
 
     if probe is None:
-        print("WARN: Gemini API unreachable (quota/model). Rules fallback OK.")
-        print("PASS: ambiguous wrong-transfer stays insufficient_data without blind TXN pick")
+        print("PASS (rules fallback)")
         return
 
     assert "gemini_routed" in (out.get("reason_codes") or [])
-    print("PASS: Gemini slow path + rules fallback semantics")
-    print("reason_codes:", out.get("reason_codes"))
+    print("PASS")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Adversarial edge cases from team red-team evaluation."""
 
 from __future__ import annotations
 
