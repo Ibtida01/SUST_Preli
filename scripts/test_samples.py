@@ -10,7 +10,7 @@ SAMPLES = Path(__file__).resolve().parent.parent / "question" / "SUST_Preli_Samp
 
 
 def main() -> None:
-    data = json.loads(SAMPLES.read_text())
+    data = json.loads(SAMPLES.read_text(encoding="utf-8"))
     passed = 0
     total = len(data["cases"])
 

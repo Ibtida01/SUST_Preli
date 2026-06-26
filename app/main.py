@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import logging
 
@@ -7,15 +7,14 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.investigator import analyze_ticket_async
+from app.investigator import analyze_ticket_with_optional_llm
 from app.models import AnalyzeTicketRequest, AnalyzeTicketResponse, ErrorResponse, HealthResponse
 
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-MAX_COMPLAINT_LENGTH = 2000
+MAX_COMPLAINT_CHARS = 4000
 
 app = FastAPI(
     title="QueueStorm Investigator",
@@ -62,7 +61,7 @@ async def analyze_ticket_endpoint(payload: AnalyzeTicketRequest) -> AnalyzeTicke
             content=ErrorResponse(detail="Complaint cannot be empty").model_dump(),
         )
 
-    if len(payload.complaint) > MAX_COMPLAINT_LENGTH:
-        payload = payload.model_copy(update={"complaint": payload.complaint[:MAX_COMPLAINT_LENGTH]})
+    if len(payload.complaint) > MAX_COMPLAINT_CHARS:
+        payload = payload.model_copy(update={"complaint": payload.complaint[:MAX_COMPLAINT_CHARS]})
 
-    return await analyze_ticket_async(payload)
+    return await analyze_ticket_with_optional_llm(payload)
