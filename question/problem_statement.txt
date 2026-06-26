@@ -1,0 +1,92 @@
+SUST CSE CARNIVAL 2026 csecarnival@sust.edu via amazonses.com 
+7:27PM (6 minutes ago)
+to me
+
+Dear Participants,
+
+The Preliminary Round of the Codex Community Hackathon will be held on:
+
+Date: 26th June
+Time: 7:30 PM – 12:00 AM
+Mode: Online
+Duration: 4.5 hours
+
+All necessary materials, including the question, problem statement, marking rubric, team instructions, and submission form, are available here:
+
+Preliminary Problem Statement, Marking Rubrics & Team Instructions:
+https://drive.google.com/drive/folders/1M5KdXIGjiyt2VrviVtMSaUfzAWtzb-9l?usp=drive_link
+
+Submission Form:
+https://forms.gle/2CRHFhkfK9SymBhJ7
+
+If you need External Resources for Deployment:
+
+Poridhi Lab:
+https://poridhi.io/lab-group-modules/6a3d317023b200e2a422868c/6a3d33dfbfa7b7946e297ec6
+
+Poridhi Lab Manual:
+https://subtle-florentine-5d2b4b.netlify.app/
+
+Please read the problem statement, marking rubric, and team instructions carefully before starting. All required details about the task, judging process, API requirements, deployment options, safety rules, and submission format are included in the provided documents.
+
+Participants may use any suitable platform for deployment. Using Poridhi Lab is optional. If you face any issue accessing Poridhi Lab, you may try using the 1.1.1.1 VPN/WARP service and access it again. Please launch only 1 Poridhi Lab instance per team. Do not launch more than one instance per team.
+
+Important reminders:
+
+Submit only one response per team.
+Your GitHub repository must be accessible to the organizers.
+If your GitHub repository is private, add the GitHub handle bipulhf with read access before submission.
+If you submit a deployed endpoint, it must be reachable without login or private access.
+Do not commit API keys, .env files, credentials, or secrets to GitHub.
+Use only synthetic data; do not use real customer or payment data.
+Complete the submission form before the deadline.
+Build the API first. Make the schema correct. Add evidence reasoning. Add safety guardrails. Test it. Deploy it. Submit clearly. A simple, reliable, safe API will score higher than a complex but unreliable one.
+
+For any emergency queries feel free to contact:
+
+1. Shahiduzzaman Bipul - 01767624553 - bipulhf@gmail.com
+2. Abhishek Dash - 01623470338 - abhishek.cse4@gmail.com
+
+
+🚀 Codex Community Hackathon : bKash presents SUST CSE Carnival 2026
+Preliminary Round
+Welcome to the Codex Community Hackathon : bKash presents SUST CSE Carnival 2026 Preliminary Round!
+
+This workspace is provided to help your team build, test, and deploy your solution during the online preliminary round. Using Poridhi Lab is completely optional - you are free to use any development or deployment platform of your choice.
+
+Submission Form:
+https://forms.gle/BYFGj2tyN4RhBco68
+
+📋 Before You Start
+💻 Resource details
+https://docs.google.com/document/d/1_mEvXHN7tUshpM00L2ZAYTSHVJugS2Vj3gCdMThf8Ps/edit?tab=t.0
+
+Please make sure you have carefully read the following materials before beginning your implementation:
+
+•⁠ ⁠📄 Problem Statement •⁠ ⁠📊 Marking Rubric •⁠ ⁠👥 Team Instructions •⁠ ⁠📝 Submission Guidelines
+
+These documents contain everything you need to know about the challenge, evaluation criteria, API requirements, deployment expectations, safety rules, and submission process.
+
+✅ Submission Checklist
+Before submitting your project, please ensure that:
+
+•⁠ ⁠✅ Your team information is correct.
+•⁠ ⁠✅ Your GitHub repository contains the latest version of your project.
+•⁠ ⁠✅ Your GitHub repository is publicly accessible.
+•⁠ ⁠✅ If your repository is private, add ⁠ bipulhf ⁠ as a collaborator with read access.
+•⁠ ⁠✅ Your application is deployed and accessible through a public live URL (no login required).
+•⁠ ⁠✅ All AI APIs, external APIs, and third-party integrations are functional during evaluation.
+•⁠ ⁠✅ If authentication is required, provide demo/test credentials in your submission.
+•⁠ ⁠✅ Do not commit API keys, ⁠ .env ⁠ files, credentials, or any secrets to GitHub.
+•⁠ ⁠✅ Use synthetic or mock data only. Do not use real customer, financial, or payment data.
+•⁠ ⁠✅ All submitted links (GitHub, deployment, documentation, demo video, etc.) are publicly accessible.
+•⁠ ⁠✅ Submit only one response per team.
+•⁠ ⁠✅ Complete the submission form before the submission deadline.
+
+🌐 Deployment
+You may deploy your application using any platform or cloud provider.
+
+If you choose to use Poridhi Lab, you can develop, run, and deploy your application directly from the provided environment.
+
+⁠*Note:* If you experience issues accessing Poridhi Lab, try connecting through *Cloudflare WARP (1.1.1.1 VPN)* and refresh the page.
+We look forward to seeing your solutions. Best of luck, and we hope to see your team in the final round!
