@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -697,6 +698,11 @@ def build_customer_reply(
 
 
 def analyze_ticket(request: AnalyzeTicketRequest) -> AnalyzeTicketResponse:
+    """Sync entry point for tests and scripts."""
+    return asyncio.run(analyze_ticket_async(request))
+
+
+async def analyze_ticket_async(request: AnalyzeTicketRequest) -> AnalyzeTicketResponse:
     complaint = sanitize_complaint_for_analysis(request.complaint)
     if not complaint.strip():
         case_type: CaseType = "other"
@@ -749,6 +755,52 @@ def analyze_ticket(request: AnalyzeTicketRequest) -> AnalyzeTicketResponse:
         match = MatchResult(None, "insufficient_data", 0.95, ["phishing", "credential_protection", "critical_escalation"])
     else:
         match = match_transactions(complaint, request.transaction_history, case_type)
+
+    vague = is_vague_complaint(complaint)
+    rules_case_type = case_type
+
+    import os
+
+    if os.getenv("USE_GEMINI", "").strip().lower() in ("1", "true", "yes", "on"):
+        from app.agent import merge_case_type, route_with_gemini, should_invoke_gemini
+
+        if should_invoke_gemini(
+            match.confidence,
+            ambiguous=match.ambiguous,
+            case_type=case_type,
+            vague=vague,
+        ):
+            gemini = await route_with_gemini(request, complaint)
+            if gemini:
+                merged_type = merge_case_type(rules_case_type, gemini)
+                complaint_for_match = (
+                    gemini.filtered_complaint.strip()
+                    if gemini.filtered_complaint.strip()
+                    else complaint
+                )
+                if merged_type != case_type:
+                    case_type = merged_type
+                    if case_type == "phishing_or_social_engineering":
+                        match = MatchResult(
+                            None,
+                            "insufficient_data",
+                            max(match.confidence, gemini.confidence),
+                            ["phishing", "credential_protection", "critical_escalation", "gemini_routed"],
+                        )
+                    else:
+                        match = match_transactions(
+                            complaint_for_match, request.transaction_history, case_type
+                        )
+                reason_codes = list(match.reason_codes)
+                if "gemini_routed" not in reason_codes:
+                    reason_codes.append("gemini_routed")
+                match = MatchResult(
+                    match.transaction,
+                    match.verdict,
+                    round(max(match.confidence, gemini.confidence), 2),
+                    reason_codes,
+                    ambiguous=match.ambiguous,
+                )
 
     txn_id = match.transaction.transaction_id if match.transaction else None
     severity = determine_severity(case_type, match, complaint)

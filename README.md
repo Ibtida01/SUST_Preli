@@ -17,14 +17,52 @@ AI/API support copilot for the **SUST CSE Carnival 2026 · Codex Community Hacka
 
 ## AI / model usage
 
-This submission uses a **rules-first hybrid** approach (no external LLM required):
+**Hybrid architecture: rules-first + Gemini 1.5 Flash (LangChain LCEL slow path)**
 
-- Keyword and amount extraction from English, Bangla, and mixed complaints
-- Transaction scoring and ambiguity detection against provided history
-- Template-based agent summary, next action, and customer reply
-- Post-generation **safety guardrails** on all customer-facing text
+| Layer | Role |
+|-------|------|
+| **Rules engine** (`investigator.py`) | Always runs: sanitization, TXN matching, evidence verdict, routing, templates |
+| **Heuristic router** | Fast path when match confidence ≥ 0.9 and not ambiguous |
+| **LangChain agent** (`agent.py`) | Slow path: Gemini classifies `case_type` + filters complaint via structured output |
+| **Guardrails** (`safety.py`) | Always post-processes customer-facing text (vault pattern — LLM never authors final reply) |
 
-An external LLM can be added later via environment variables for richer language generation, with rules as fallback.
+If `USE_GEMINI=false`, Gemini errors, or timeout (>4.5s) → rules-only fallback. All unit tests run with Gemini disabled.
+
+### Enable Gemini locally
+
+```bash
+cp .env.example .env
+# Edit .env:
+# USE_GEMINI=true
+# GEMINI_API_KEY=your_google_ai_studio_key
+# GEMINI_MODEL=gemini-2.0-flash
+
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+Smoke test (requires API key):
+
+```bash
+PYTHONPATH=. python scripts/test_gemini_smoke.py
+```
+
+### Render deployment
+
+Set in Render dashboard → Environment:
+
+| Variable | Value |
+|----------|--------|
+| `USE_GEMINI` | `true` |
+| `GEMINI_API_KEY` | secret (Google AI Studio) |
+| `GEMINI_MODEL` | `gemini-1.5-flash` |
+| `GEMINI_TIMEOUT_SECONDS` | `4.5` |
+
+### Security hardening
+
+- Complaints truncated to 2000 chars at the API gateway (token exhaustion defense)
+- `{}` stripped before LangChain prompt formatting (template breakout defense)
+- Gemini output limited to structured routing fields — customer replies from deterministic templates only
 
 ## Safety logic
 
@@ -104,6 +142,7 @@ See `samples/sample_output_tkt001.json` for output from public sample case SAMPL
 
 ## MODELS
 
-| Model | Where it runs | Why |
-|-------|---------------|-----|
-| None (rule engine) | In-process Python | Fast, reliable, no API cost, meets 30s timeout easily |
+| Model | Where | Role |
+|-------|--------|------|
+| **Rules engine** | In-process Python | Investigation, matching, evidence (always) |
+| **Gemini 2.0 Flash** | Google AI via LangChain | Slow-path filter + `case_type` routing (`gemini-1.5-flash` unavailable on many new API keys) |

@@ -9,3 +9,11 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12"
+      - key: USE_GEMINI
+        value: "false"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: "gemini-2.0-flash"
+      - key: GEMINI_TIMEOUT_SECONDS
+        value: "4.5"

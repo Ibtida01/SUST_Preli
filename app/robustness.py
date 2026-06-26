@@ -44,6 +44,7 @@ def sanitize_complaint_for_analysis(complaint: str) -> str:
     cleaned = complaint
     for pattern in INJECTION_PATTERNS:
         cleaned = pattern.sub(" ", cleaned)
+    cleaned = cleaned.replace("{", " ").replace("}", " ")
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned
 
