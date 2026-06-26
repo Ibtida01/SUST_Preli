@@ -2,39 +2,42 @@ from __future__ import annotations
 
 import re
 
-# Strip adversarial instruction blocks from complaint text used for classification.
-INJECTION_LINE_PATTERNS = [
+# Remove adversarial clauses from complaint text used for classification.
+INJECTION_PATTERNS = [
     re.compile(p, re.IGNORECASE)
     for p in [
         r"ignore (?:all )?(?:previous |prior )?instructions",
         r"disregard (?:all )?(?:previous )?rules",
-        r"you are now (?:a |an )?",
+        r"you are now (?:a |an )?\w+",
         r"system prompt",
-        r"classify (?:this )?(?:ticket )?as",
-        r"set case_type to",
-        r"respond (?:only )?with",
-        r"output (?:only )?",
-        r"return (?:only )?json",
+        r"classify (?:this )?(?:ticket )?as\s+\w+",
+        r"set case_type to\s+\w+",
+        r"respond (?:only )?with\b.*",
+        r"output (?:only )?\b.*",
+        r"return (?:only )?json\b.*",
         r"ask (?:the )?customer for (?:their )?(?:pin|otp|password)",
         r"confirm (?:the )?refund",
         r"promise (?:a )?refund",
+        r"say (?:the )?refund is confirmed",
+        r"refund is confirmed",
     ]
 ]
 
 TRANSACTION_ID_PATTERN = re.compile(r"\bTXN-\d+\b", re.IGNORECASE)
-PHONE_PATTERN = re.compile(r"(?:\+?880|0)1[0-9]{9}\b")
+# BD mobile: optional spaces/dashes between country code and subscriber number
+PHONE_CANDIDATE_PATTERN = re.compile(
+    r"\+?880[\d\s\-]{10,16}|0\s*1[\d\s\-]{9,14}",
+    re.IGNORECASE,
+)
 
 
 def sanitize_complaint_for_analysis(complaint: str) -> str:
-    """Remove prompt-injection style lines; never trust embedded agent instructions."""
-    lines = complaint.splitlines()
-    kept: list[str] = []
-    for line in lines:
-        if any(p.search(line) for p in INJECTION_LINE_PATTERNS):
-            continue
-        kept.append(line)
-    cleaned = " ".join(kept).strip()
-    return cleaned or complaint.strip()
+    """Strip injection clauses in-place so legitimate text on the same line is kept."""
+    cleaned = complaint
+    for pattern in INJECTION_PATTERNS:
+        cleaned = pattern.sub(" ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
 
 
 def extract_transaction_ids(text: str) -> list[str]:
@@ -43,19 +46,24 @@ def extract_transaction_ids(text: str) -> list[str]:
 
 def extract_phone_numbers(text: str) -> list[str]:
     numbers: list[str] = []
-    for raw in PHONE_PATTERN.findall(text):
+    seen: set[str] = set()
+    for raw in PHONE_CANDIDATE_PATTERN.findall(text):
         digits = re.sub(r"\D", "", raw)
-        if digits.startswith("880"):
-            numbers.append("+" + digits)
-        elif digits.startswith("01"):
-            numbers.append("+88" + digits)
+        normalized: str | None = None
+        if len(digits) == 13 and digits.startswith("8801"):
+            normalized = "+" + digits
+        elif len(digits) == 11 and digits.startswith("01"):
+            normalized = "+88" + digits
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            numbers.append(normalized)
     return numbers
 
 
 def normalize_phone(value: str) -> str:
     digits = re.sub(r"\D", "", value)
-    if digits.startswith("880"):
+    if len(digits) == 13 and digits.startswith("880"):
         return "+" + digits
-    if digits.startswith("01"):
+    if len(digits) == 11 and digits.startswith("01"):
         return "+88" + digits
     return value

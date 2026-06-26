@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from app.models import (
@@ -26,6 +26,7 @@ AMOUNT_PATTERN = re.compile(
     r"(?<!\d)(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*(?:taka|tk|bdt|টাকা)?",
     re.IGNORECASE,
 )
+K_AMOUNT_PATTERN = re.compile(r"(?<![a-z0-9])(\d+(?:\.\d+)?)\s*k\b", re.IGNORECASE)
 BANGLA_DIGITS = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
 
 
@@ -53,12 +54,22 @@ def extract_amounts(text: str) -> list[float]:
                 amounts.append(float(digits))
             except ValueError:
                 continue
+    for match in K_AMOUNT_PATTERN.finditer(normalized):
+        try:
+            amounts.append(float(match.group(1)) * 1000)
+        except ValueError:
+            continue
     return amounts
 
 
 def parse_timestamp(value: str) -> Optional[datetime]:
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        return dt
     except ValueError:
         return None
 
@@ -85,10 +96,30 @@ def detect_case_type(complaint: str, user_type: str | None) -> CaseType:
     if "duplicate" in text or "twice" in text or "double" in text or "দুইবার" in text or "two times" in text:
         return "duplicate_payment"
 
-    if "wrong" in text or "mistake" in text or "ভুল" in text or "incorrect number" in text:
+    wrong_transfer_signals = [
+        "wrong", "mistake", "ভুল", "vul", "bhul", "galat", "incorrect number",
+        "wrong number", "vul number", "bhul number",
+    ]
+    if any(w in text for w in wrong_transfer_signals) or "pathaisi" in text or "pathiye" in text:
         return "wrong_transfer"
 
-    if user_type == "merchant" or ("settlement" in text or "settled" in text):
+    failure_context_signals = [
+        "failed", "deducted", "error", "unsuccessful", "did not complete",
+        "not completed", "stuck", "didn't go through", "did not go through",
+        "money was cut", "balance cut", "balance was cut", "balance was",
+        "recharge", "top up", "top-up", "electricity", "bill payment",
+        "dekhay", "dekhacche", "hoise",
+        "ব্যালেন্স কাট", "ফেল", "হয়নি",
+    ]
+    has_failure_context = any(s in text for s in failure_context_signals)
+
+    if has_failure_context and not any(w in text for w in wrong_transfer_signals):
+        return "payment_failed"
+
+    if "refund" in text or "ফেরত" in text or "ferot" in text or "change my mind" in text or "cancel" in text:
+        return "refund_request"
+
+    if user_type == "merchant" and ("settlement" in text or "settled" in text):
         return "merchant_settlement_delay"
 
     if (
@@ -100,19 +131,6 @@ def detect_case_type(complaint: str, user_type: str | None) -> CaseType:
         or ("এজেন্ট" in text and ("ব্যালেন্স" in text or "টাকা" in text))
     ):
         return "agent_cash_in_issue"
-
-    payment_failed_signals = [
-        "failed", "deducted", "error", "unsuccessful", "did not complete",
-        "not completed", "stuck", "ব্যালেন্স কাট", "ফেল", "হয়নি",
-    ]
-    if any(s in text for s in payment_failed_signals) and "refund" not in text:
-        if "wrong" not in text and "mistake" not in text:
-            return "payment_failed"
-    if ("failed" in text or "deducted" in text) and ("refund" in text or "ফেরত" in text):
-        return "payment_failed"
-
-    if "refund" in text or "ফেরত" in text or "change my mind" in text or "cancel" in text:
-        return "refund_request"
 
     if "didn't get" in text or "not received" in text or "did not receive" in text or "পায়নি" in text or "পাইনি" in text:
         return "wrong_transfer"
@@ -135,6 +153,10 @@ def is_vague_complaint(complaint: str) -> bool:
 
 
 def find_duplicate_pair(transactions: list[Transaction]) -> Optional[Transaction]:
+    """Return the latest transaction in the most recent duplicate pair within 120 seconds."""
+    best: Optional[Transaction] = None
+    best_time: Optional[datetime] = None
+
     for i, a in enumerate(transactions):
         for b in transactions[i + 1 :]:
             if (
@@ -145,9 +167,16 @@ def find_duplicate_pair(transactions: list[Transaction]) -> Optional[Transaction
             ):
                 ta = parse_timestamp(a.timestamp)
                 tb = parse_timestamp(b.timestamp)
-                if ta and tb and abs((tb - ta).total_seconds()) <= 120:
-                    return b if tb >= ta else a
-    return None
+                if not ta or not tb:
+                    continue
+                if abs((tb - ta).total_seconds()) > 120:
+                    continue
+                later = b if tb >= ta else a
+                later_time = tb if tb >= ta else ta
+                if best_time is None or later_time > best_time:
+                    best = later
+                    best_time = later_time
+    return best
 
 
 def score_transaction(txn: Transaction, complaint: str, amounts: list[float], case_type: CaseType) -> float:
@@ -539,6 +568,43 @@ def build_customer_reply(
 
 def analyze_ticket(request: AnalyzeTicketRequest) -> AnalyzeTicketResponse:
     complaint = sanitize_complaint_for_analysis(request.complaint)
+    if not complaint.strip():
+        case_type: CaseType = "other"
+        match = MatchResult(None, "insufficient_data", 0.5, ["sanitized_empty", "needs_clarification"])
+        txn_id = None
+        severity = determine_severity(case_type, match, complaint)
+        department = route_department(case_type, severity)
+        human_review = needs_human_review(case_type, match, severity)
+        agent_summary = (
+            "Customer message contained no usable complaint details after safety sanitization. "
+            "Insufficient detail to investigate."
+        )
+        next_action = (
+            "Reply to customer asking for specific details: which transaction, what amount, "
+            "what went wrong, and approximate time."
+        )
+        customer_reply = (
+            "Thank you for reaching out. To help you faster, please share the transaction ID, "
+            "the amount involved, and a short description of what went wrong. "
+            "Please do not share your PIN or OTP with anyone."
+        )
+        lang = request.language or "en"
+        customer_reply, next_action = apply_safety_guardrails(customer_reply, next_action, lang)
+        return AnalyzeTicketResponse(
+            ticket_id=request.ticket_id,
+            relevant_transaction_id=None,
+            evidence_verdict=match.verdict,
+            case_type=case_type,
+            severity=severity,
+            department=department,
+            agent_summary=agent_summary,
+            recommended_next_action=next_action,
+            customer_reply=customer_reply,
+            human_review_required=human_review,
+            confidence=match.confidence,
+            reason_codes=match.reason_codes,
+        )
+
     case_type = detect_case_type(complaint, request.user_type)
 
     if is_vague_complaint(complaint):

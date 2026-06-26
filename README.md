@@ -86,13 +86,15 @@ See `.env.example`. No secrets are required for the rule-based version.
 
 ## Robustness features (hidden-test oriented)
 
-- **Prompt-injection stripping** — adversarial lines in complaints are ignored for classification
+- **Prompt-injection stripping** — adversarial clauses removed in-place (same-line safe); empty result → safe vague handling
 - **Explicit `TXN-*` matching** — transaction IDs mentioned in complaints are linked directly
-- **Phone number matching** — counterparty numbers in complaints disambiguate transfers
+- **Phone number matching** — supports `0171-234-5678` and spaced formats
+- **Timezone-safe timestamps** — mixed `Z` / naive ISO datetimes won't crash duplicate detection
 - **Broader phishing detection** — SMS/report-style scams without explicit "call" keyword
-- **Duplicate detection** — identical payments within 2 minutes even without "duplicate" keyword
+- **Duplicate detection** — identical payments within 2 minutes; picks latest in a chain
+- **Expanded payment-failed keywords** — bill, recharge, "didn't go through", etc.
+- **Hardened safety patterns** — catches `we'll refund`, `was refunded`, suspicious third-party contact phrases
 - **High-value escalation** — large disputed amounts flagged for human review
-- **Safety post-processing** — refund/credential guardrails on all customer replies
 
 Run edge-case tests: `PYTHONPATH=. python scripts/test_hidden_edge.py`
 
