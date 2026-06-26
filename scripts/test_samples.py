@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Quick local test runner against public sample cases."""
 
 import json
 from pathlib import Path

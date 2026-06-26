@@ -1,5 +1,3 @@
-"""LangChain LCEL pipeline — Gemini 1.5 Flash for filter + case routing (slow path only)."""
-
 from __future__ import annotations
 
 import asyncio
@@ -144,5 +142,5 @@ async def route_with_gemini(
             timeout=_gemini_timeout(),
         )
     except Exception as exc:
-        logger.warning("Gemini slow-path routing failed, using rules fallback: %s", exc)
+        logger.warning("Gemini routing failed: %s", exc)
         return None

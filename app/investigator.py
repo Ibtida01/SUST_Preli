@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -202,7 +203,6 @@ def is_vague_complaint(complaint: str) -> bool:
 
 
 def find_duplicate_pair(transactions: list[Transaction]) -> Optional[Transaction]:
-    """Return the latest transaction in the most recent duplicate pair within 120 seconds."""
     best: Optional[Transaction] = None
     best_time: Optional[datetime] = None
 
@@ -229,7 +229,6 @@ def find_duplicate_pair(transactions: list[Transaction]) -> Optional[Transaction
 
 
 def should_infer_duplicate_payment(complaint: str, transactions: list[Transaction]) -> bool:
-    """Infer duplicate_payment when history has a duplicate pair and complaint hints at double charge."""
     duplicate = find_duplicate_pair(transactions)
     if not duplicate:
         return False
@@ -305,7 +304,6 @@ def resolve_phone_amount_matches(
     case_type: CaseType,
     transactions: list[Transaction],
 ) -> MatchResult | None:
-    """Disambiguate multiple phone matches using amount and transaction status."""
     amounts = extract_amounts(complaint)
     if amounts:
         matches = [t for t in matches if any(abs(t.amount - a) < 0.01 for a in amounts)]
@@ -698,7 +696,6 @@ def build_customer_reply(
 
 
 def analyze_ticket(request: AnalyzeTicketRequest) -> AnalyzeTicketResponse:
-    """Sync entry point for tests and scripts."""
     return asyncio.run(analyze_ticket_async(request))
 
 
@@ -758,8 +755,6 @@ async def analyze_ticket_async(request: AnalyzeTicketRequest) -> AnalyzeTicketRe
 
     vague = is_vague_complaint(complaint)
     rules_case_type = case_type
-
-    import os
 
     if os.getenv("USE_GEMINI", "").strip().lower() in ("1", "true", "yes", "on"):
         from app.agent import merge_case_type, route_with_gemini, should_invoke_gemini

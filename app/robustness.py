@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 
-# Remove adversarial clauses from complaint text used for classification.
 INJECTION_PATTERNS = [
     re.compile(p, re.IGNORECASE)
     for p in [
@@ -28,7 +27,6 @@ INJECTION_PATTERNS = [
 
 TRANSACTION_ID_PATTERN = re.compile(r"\bTXN-\d+\b", re.IGNORECASE)
 BANGLA_DIGITS = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
-# BD mobile: optional spaces/dashes between country code and subscriber number
 PHONE_CANDIDATE_PATTERN = re.compile(
     r"\+?880[\d\s\-]{10,16}|0\s*1[\d\s\-]{9,14}",
     re.IGNORECASE,
@@ -40,7 +38,6 @@ def normalize_digits(text: str) -> str:
 
 
 def sanitize_complaint_for_analysis(complaint: str) -> str:
-    """Strip injection clauses in-place so legitimate text on the same line is kept."""
     cleaned = complaint
     for pattern in INJECTION_PATTERNS:
         cleaned = pattern.sub(" ", cleaned)

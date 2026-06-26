@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Extreme edge cases from team evaluation."""
 
 from __future__ import annotations
 

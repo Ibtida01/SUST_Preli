@@ -19,7 +19,7 @@ MAX_COMPLAINT_LENGTH = 2000
 
 app = FastAPI(
     title="QueueStorm Investigator",
-    description="AI/API support copilot for digital finance support tickets",
+    description="Support ticket investigator API",
     version="1.0.0",
 )
 

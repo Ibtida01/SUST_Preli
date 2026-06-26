@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Stress and robustness tests — crashes, Banglish/Bangla variants, structural inference."""
 
 from __future__ import annotations
 

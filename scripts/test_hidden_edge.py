@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Synthetic edge cases inspired by likely hidden judge scenarios."""
 
 from __future__ import annotations
 
 from app.investigator import analyze_ticket
-from app.models import AnalyzeTicketRequest, Transaction
+from app.models import AnalyzeTicketRequest
 
 EDGE_CASES = [
     {

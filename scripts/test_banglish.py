@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Banglish romanized complaint test cases."""
 
 from __future__ import annotations
 
