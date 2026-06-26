@@ -34,7 +34,7 @@
     "department": "dispute_resolution",
     "agent_summary": "Customer concern relates to TXN-9101 (5000 BDT, transfer, status completed). Case classified as wrong transfer.",
     "recommended_next_action": "Verify TXN-9101 details with the customer and initiate the wrong-transfer dispute workflow per policy.",
-    "customer_reply": "We have noted your concern about transaction TXN-9101. Please do not Please do not share your PIN or OTP with anyone. with anyone. Our dispute team will review the case and contact you through official support channels.",
+    "customer_reply": "We have noted your concern about transaction TXN-9101. Please do not share your PIN or OTP with anyone. Our dispute team will review the case and contact you through official support channels.",
     "human_review_required": true,
     "confidence": 0.95,
     "reason_codes": [

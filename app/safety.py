@@ -2,14 +2,6 @@ from __future__ import annotations
 
 import re
 
-CREDENTIAL_REQUEST_PATTERNS = [
-    re.compile(p, re.IGNORECASE)
-    for p in [
-        r"\b(?:share|provide|send|enter|give)\b.{0,40}\b(?:pin|otp|password|card number)\b",
-        r"\b(?:what is|tell us|confirm)\b.{0,30}\b(?:pin|otp|password)\b",
-    ]
-]
-
 UNSAFE_REFUND_PATTERNS = [
     re.compile(p, re.IGNORECASE)
     for p in [
@@ -22,6 +14,11 @@ UNSAFE_REFUND_PATTERNS = [
     ]
 ]
 
+CREDENTIAL_REQUEST_PATTERN = re.compile(
+    r"\b(?:share|provide|send|enter|give)\b.{0,40}\b(?:pin|otp|password|card number)\b",
+    re.IGNORECASE,
+)
+
 SAFE_REFUND_PHRASE = "any eligible amount will be returned through official channels"
 CREDENTIAL_WARNING_EN = "Please do not share your PIN or OTP with anyone."
 CREDENTIAL_WARNING_BN = "অনুগ্রহ করে কারো সাথে আপনার পিন বা ওটিপি শেয়ার করবেন না।"
@@ -31,12 +28,31 @@ def is_bangla_text(text: str) -> bool:
     return bool(re.search(r"[\u0980-\u09FF]", text))
 
 
+def has_credential_warning(text: str) -> bool:
+    lower = text.lower()
+    if "পিন" in text and "শেয়ার করবেন না" in text:
+        return True
+    if any(p in lower for p in ("do not share", "don't share", "never share", "never ask")):
+        return any(w in lower for w in ("pin", "otp", "password"))
+    return False
+
+
+def contains_credential_request(text: str) -> bool:
+    for match in CREDENTIAL_REQUEST_PATTERN.finditer(text):
+        start = match.start()
+        window = text[max(0, start - 20) : start].lower()
+        if any(p in window for p in ("do not ", "don't ", "never ", "not ")):
+            continue
+        return True
+    return False
+
+
 def apply_safety_guardrails(customer_reply: str, recommended_next_action: str, language: str | None) -> tuple[str, str]:
     reply = customer_reply.strip()
     action = recommended_next_action.strip()
 
-    for pattern in CREDENTIAL_REQUEST_PATTERNS:
-        reply = pattern.sub(CREDENTIAL_WARNING_EN, reply)
+    if contains_credential_request(reply):
+        reply = CREDENTIAL_REQUEST_PATTERN.sub(CREDENTIAL_WARNING_EN, reply, count=1)
 
     for pattern in UNSAFE_REFUND_PATTERNS:
         reply = pattern.sub(
@@ -45,14 +61,13 @@ def apply_safety_guardrails(customer_reply: str, recommended_next_action: str, l
         )
 
     warning = CREDENTIAL_WARNING_BN if language == "bn" or is_bangla_text(reply) else CREDENTIAL_WARNING_EN
-    if warning.lower() not in reply.lower() and "পিন" not in reply:
+    if not has_credential_warning(reply):
         reply = f"{reply.rstrip('.')}. {warning}"
 
     if SAFE_REFUND_PHRASE not in reply.lower() and re.search(
         r"\brefund\b|\breversal\b|\breturned\b", reply, re.IGNORECASE
     ):
-        if SAFE_REFUND_PHRASE not in reply:
-            reply = f"{reply.rstrip('.')}. Our team will review the case and {SAFE_REFUND_PHRASE}."
+        reply = f"{reply.rstrip('.')}. Our team will review the case and {SAFE_REFUND_PHRASE}."
 
     for pattern in UNSAFE_REFUND_PATTERNS:
         action = pattern.sub("Initiate the official review workflow per policy.", action)
